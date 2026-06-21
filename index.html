@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PDF to Deal - Extractor de Presupuestos</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📄</text></svg>">
+  <!-- Lucide Icons for high quality visuals -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+</head>
+<body>
+
+  <!-- Floating Background Glows -->
+  <div class="bg-glow-container">
+    <div class="bg-glow-1"></div>
+    <div class="bg-glow-2"></div>
+  </div>
+
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <h1>PDF to Deal</h1>
+      <p>Arrastra tu presupuesto en PDF para extraer los datos de forma 100% local y segura</p>
+    </header>
+
+    <!-- Settings Toggle -->
+    <div class="settings-toggle-container">
+      <button class="btn btn-secondary" id="toggle-settings-btn">
+        <i data-lucide="settings" style="width: 18px; height: 18px;"></i> Configuración HubSpot
+      </button>
+    </div>
+
+    <!-- Settings Panel (Glassmorphic, initially hidden) -->
+    <div class="glass-panel settings-panel" id="settings-panel" style="display: none;">
+      <div class="section-header">
+        <i data-lucide="settings-2"></i>
+        <h2>Configuración de Sincronización HubSpot</h2>
+      </div>
+      <div class="form-grid">
+        <div class="form-group col-8">
+          <label for="hubspot-token">Token de Acceso Privado (Private App Access Token)</label>
+          <div class="password-input-container">
+            <input type="password" id="hubspot-token" class="form-control" placeholder="pat-na1-xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+            <button type="button" class="btn-toggle-password" id="toggle-password-btn">
+              <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+            </button>
+          </div>
+        </div>
+        <div class="form-group col-4">
+          <label for="hubspot-cors-method">Método de Conexión (CORS)</label>
+          <select id="hubspot-cors-method" class="form-control">
+            <option value="direct">Conexión Directa (Requiere Extensión CORS)</option>
+            <option value="proxy">CORS Proxy Server</option>
+          </select>
+        </div>
+        
+        <div class="form-group col-12" id="proxy-url-group" style="display: none;">
+          <label for="hubspot-proxy-url">URL del Proxy CORS</label>
+          <input type="url" id="hubspot-proxy-url" class="form-control" placeholder="https://cors-anywhere.herokuapp.com/">
+          <span class="help-text" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; display: block;">Se antepondrá al endpoint de HubSpot (ej. proxy.com/https://api.hubapi.com/...)</span>
+        </div>
+
+        <div class="form-group col-6">
+          <label for="hubspot-pipeline">ID de Pipeline de Negocios</label>
+          <input type="text" id="hubspot-pipeline" class="form-control" placeholder="default" value="default">
+        </div>
+        <div class="form-group col-6">
+          <label for="hubspot-stage">Etapa del Negocio (Deal Stage)</label>
+          <input type="text" id="hubspot-stage" class="form-control" placeholder="appointmentscheduled" value="appointmentscheduled">
+        </div>
+      </div>
+      <div class="actions-bar" style="margin-top: 1rem; border-top: none; padding-top: 0;">
+        <button class="btn btn-primary" id="save-settings-btn">
+          <i data-lucide="save" style="width: 18px; height: 18px;"></i> Guardar Configuración
+        </button>
+      </div>
+    </div>
+
+    <!-- Upload Panel (Glassmorphic) -->
+    <div class="glass-panel" id="upload-panel">
+      <div class="dropzone" id="dropzone">
+        <div class="dropzone-icon">
+          <i data-lucide="file-text" style="width: 32px; height: 32px;"></i>
+        </div>
+        <h3>Arrastra tu archivo PDF aquí</h3>
+        <p>o haz clic para buscar en tu dispositivo</p>
+        <button class="btn btn-secondary btn-sm" id="browse-btn">Seleccionar Archivo</button>
+        <input type="file" id="file-input" accept="application/pdf" style="display: none;">
+      </div>
+
+      <!-- Loader -->
+      <div class="loader-container" id="loader-container">
+        <div class="loader"></div>
+        <p class="loader-text">Procesando documento y extrayendo campos...</p>
+      </div>
+    </div>
+
+    <!-- Data Form Panel (Glassmorphic, initially hidden) -->
+    <div class="glass-panel app-content" id="app-content">
+      <form id="pdf-form">
+        
+        <!-- Section 1: Cliente y Obra -->
+        <div class="section-header">
+          <i data-lucide="briefcase"></i>
+          <h2>Información del Cliente y Obra</h2>
+        </div>
+        <div class="form-grid">
+          <div class="form-group col-6">
+            <label for="empresa">Empresa / Cliente</label>
+            <input type="text" id="empresa" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-6">
+            <label for="contacto">Nombre de Contacto</label>
+            <input type="text" id="contacto" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-4">
+            <label for="mail">Correo Electrónico</label>
+            <input type="email" id="mail" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-4">
+            <label for="dominio">Dominio Corporativo</label>
+            <input type="text" id="dominio" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-4">
+            <label for="telf">Teléfono</label>
+            <input type="text" id="telf" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-6">
+            <label for="ref">Referencia (Ref.)</label>
+            <input type="text" id="ref" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-3">
+            <label for="presupuesto">Nº Presupuesto</label>
+            <input type="text" id="presupuesto" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-3">
+            <label for="cint">C.Int.</label>
+            <input type="text" id="cint" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-12">
+            <label for="obra">Obra</label>
+            <input type="text" id="obra" class="form-control" placeholder="No detectado">
+          </div>
+        </div>
+
+        <!-- Section 2: Fechas, Cantidades y Valores -->
+        <div class="section-header">
+          <i data-lucide="calendar-range"></i>
+          <h2>Fechas, Cantidades y Valores</h2>
+        </div>
+        <div class="form-grid">
+          <div class="form-group col-3">
+            <label for="fecha">Fecha de Emisión</label>
+            <input type="text" id="fecha" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-3">
+            <label for="fecha_vencimiento">Fecha de Vencimiento</label>
+            <input type="text" id="fecha_vencimiento" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-3">
+            <label for="metros">Metros Cuadrados (m²)</label>
+            <input type="text" id="metros" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-3">
+            <label for="total">Total del Presupuesto</label>
+            <input type="text" id="total" class="form-control" placeholder="No detectado">
+          </div>
+        </div>
+
+        <!-- Section 3: Observaciones y Condiciones -->
+        <div class="section-header">
+          <i data-lucide="file-edit"></i>
+          <h2>Observaciones y Condiciones Generales</h2>
+        </div>
+        <div class="form-grid">
+          <div class="form-group col-12">
+            <label for="observaciones">Observaciones (Contenido Completo)</label>
+            <textarea id="observaciones" class="form-control" rows="4" placeholder="No detectado"></textarea>
+          </div>
+          <div class="form-group col-12">
+            <label for="condiciones">Condiciones Generales (Contenido Completo)</label>
+            <textarea id="condiciones" class="form-control" rows="5" placeholder="No detectado"></textarea>
+          </div>
+          <div class="form-group col-4">
+            <label for="entrega">Entrega</label>
+            <input type="text" id="entrega" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-4">
+            <label for="forma_pago">Forma de Pago</label>
+            <input type="text" id="forma_pago" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-4">
+            <label for="mano_obra">Mano de Obra</label>
+            <input type="text" id="mano_obra" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-6">
+            <label for="mayores_costos">Mayores Costos</label>
+            <input type="text" id="mayores_costos" class="form-control" placeholder="No detectado">
+          </div>
+          <div class="form-group col-6">
+            <label for="validez">Validez de la Oferta</label>
+            <input type="text" id="validez" class="form-control" placeholder="No detectado">
+          </div>
+        </div>
+
+        <!-- Actions Bar -->
+        <div class="actions-bar">
+          <button type="button" class="btn btn-secondary" id="reset-btn">
+            <i data-lucide="trash-2" style="width: 18px; height: 18px;"></i> Limpiar
+          </button>
+          <button type="button" class="btn btn-primary" id="copy-text-btn">
+            <i data-lucide="clipboard" style="width: 18px; height: 18px;"></i> Copiar Formateado
+          </button>
+          <button type="button" class="btn btn-success" id="copy-json-btn">
+            <i data-lucide="copy" style="width: 18px; height: 18px;"></i> Copiar Datos (JSON)
+          </button>
+          <button type="button" class="btn btn-hubspot" id="sync-hubspot-btn">
+            <i data-lucide="refresh-cw" style="width: 18px; height: 18px;"></i> Sincronizar con HubSpot
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <!-- Footer -->
+    <footer>
+      <p>&copy; 2026 PDF to Deal. Los archivos se procesan localmente y nunca salen de tu navegador.</p>
+    </footer>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">
+    <div class="toast-icon">
+      <i data-lucide="check-circle" style="width: 20px; height: 20px;"></i>
+    </div>
+    <span id="toast-message">Copiado con éxito!</span>
+  </div>
+
+  <!-- Load PDF.js from official Cloudflare/Mozilla CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
+  <script>
+    // Configure PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
+  </script>
+  <script src="app.js?v=1.2"></script>
+  <script>
+    // Initialize Lucide icons
+    lucide.createIcons();
+  </script>
+</body>
+</html>
