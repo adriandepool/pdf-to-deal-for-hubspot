@@ -380,6 +380,17 @@ function recomputeExpiration() {
 fields.fecha.addEventListener('input', recomputeExpiration);
 fields.validez.addEventListener('input', recomputeExpiration);
 
+// Update fecha_resultados when user manually edits fecha_vencimiento
+fields.fecha_vencimiento.addEventListener('input', () => {
+  fields.fecha_resultados.value = fields.fecha_vencimiento.value;
+  if (activePDFId) {
+    const record = processedPDFs.find(p => p.id === activePDFId);
+    if (record && record.status === 'success') {
+      record.data.fecha_resultados = fields.fecha_vencimiento.value;
+    }
+  }
+});
+
 // Process Multiple PDFs Flow
 function processMultiplePDFs(files) {
   // Hide dropzone, show workspace
@@ -575,25 +586,29 @@ function extractFieldsFromText(text) {
   const obraMatch = text.match(/Obra:\s*(.*)/i);
   extracted.obra = obraMatch ? obraMatch[1].trim() : '';
 
-  // 9. Metros cuadrados y Material (desde la línea del item de m2)
-  let materialExtracted = '';
-  let metrosExtracted = '';
+  // 9. Metros cuadrados y Material (desde las líneas de items de m2)
   const lines = text.split('\n');
   const itemRegex = /^(?:\d+[\s\.\-]*)?(.*?)\b(?:m²|m2)\s+([\d.,]+)\s+.*$/i;
-  
+  const materials = [];
+  let totalMetros = 0;
+
   for (const line of lines) {
     const match = line.match(itemRegex);
     if (match) {
-      materialExtracted = match[1].trim();
-      metrosExtracted = match[2].trim();
-      break;
+      materials.push(match[1].trim());
+      const qtyStr = match[2].trim().replace(/\./g, '').replace(',', '.');
+      const qty = parseFloat(qtyStr);
+      if (!isNaN(qty)) {
+        totalMetros += qty;
+      }
     }
   }
 
-  extracted.material = materialExtracted;
-  if (metrosExtracted) {
-    extracted.metros = metrosExtracted;
+  if (materials.length > 0) {
+    extracted.material = materials.join(', ');
+    extracted.metros = Number.isInteger(totalMetros) ? totalMetros.toString() : totalMetros.toFixed(1).replace('.', ',');
   } else {
+    extracted.material = '';
     const metrosMatch = text.match(/(?:m²|m2)\s+([\d.,]+)/i);
     extracted.metros = metrosMatch ? metrosMatch[1].trim() : '';
   }
