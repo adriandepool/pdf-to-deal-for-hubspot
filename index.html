@@ -27,7 +27,7 @@
     <!-- Settings Toggle -->
     <div class="settings-toggle-container">
       <button class="btn btn-secondary" id="toggle-settings-btn">
-        <i data-lucide="settings" style="width: 18px; height: 18px;"></i> Configuración HubSpot
+        <i data-lucide="file-spreadsheet" style="width: 18px; height: 18px;"></i> Configuración Excel Destino
       </button>
     </div>
 
@@ -35,44 +35,29 @@
     <div class="glass-panel settings-panel" id="settings-panel" style="display: none;">
       <div class="section-header">
         <i data-lucide="settings-2"></i>
-        <h2>Configuración de Sincronización HubSpot</h2>
+        <h2>Configuración del Excel de Destino</h2>
       </div>
       <div class="form-grid">
         <div class="form-group col-8">
-          <label for="hubspot-token">Token de Acceso Privado (Private App Access Token)</label>
-          <div class="password-input-container">
-            <input type="password" id="hubspot-token" class="form-control" placeholder="pat-na1-xxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
-            <button type="button" class="btn-toggle-password" id="toggle-password-btn">
-              <i data-lucide="eye" style="width: 16px; height: 16px;"></i>
+          <label>Selecciona el Archivo Excel (.xlsx, .xls)</label>
+          <div style="display: flex; gap: 10px; align-items: center; margin-top: 5px;">
+            <button type="button" class="btn btn-secondary" id="btn-select-excel" style="white-space: nowrap;">
+              <i data-lucide="upload" style="width: 16px; height: 16px;"></i> Seleccionar Excel
             </button>
+            <input type="file" id="excel-input" accept=".xlsx, .xls" style="display: none;">
+            <span id="excel-filename" style="color: var(--text-secondary); font-size: 0.9rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">Ningún archivo seleccionado (se creará uno nuevo al exportar)</span>
           </div>
         </div>
         <div class="form-group col-4">
-          <label for="hubspot-cors-method">Método de Conexión (CORS)</label>
-          <select id="hubspot-cors-method" class="form-control">
-            <option value="direct">Conexión Directa (Requiere Extensión CORS)</option>
-            <option value="proxy">CORS Proxy Server</option>
+          <label for="excel-sheet-select">Hoja de Destino</label>
+          <select id="excel-sheet-select" class="form-control" disabled>
+            <option value="">Selecciona una hoja...</option>
           </select>
-        </div>
-        
-        <div class="form-group col-12" id="proxy-url-group" style="display: none;">
-          <label for="hubspot-proxy-url">URL del Proxy CORS</label>
-          <input type="url" id="hubspot-proxy-url" class="form-control" placeholder="https://cors-anywhere.herokuapp.com/">
-          <span class="help-text" style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 0.25rem; display: block;">Se antepondrá al endpoint de HubSpot (ej. proxy.com/https://api.hubapi.com/...)</span>
-        </div>
-
-        <div class="form-group col-6">
-          <label for="hubspot-pipeline">ID de Pipeline de Negocios</label>
-          <input type="text" id="hubspot-pipeline" class="form-control" placeholder="default" value="default">
-        </div>
-        <div class="form-group col-6">
-          <label for="hubspot-stage">Etapa del Negocio (Deal Stage)</label>
-          <input type="text" id="hubspot-stage" class="form-control" placeholder="appointmentscheduled" value="appointmentscheduled">
         </div>
       </div>
       <div class="actions-bar" style="margin-top: 1rem; border-top: none; padding-top: 0;">
         <button class="btn btn-primary" id="save-settings-btn">
-          <i data-lucide="save" style="width: 18px; height: 18px;"></i> Guardar Configuración
+          <i data-lucide="check" style="width: 18px; height: 18px;"></i> Confirmar Configuración
         </button>
       </div>
     </div>
@@ -81,126 +66,177 @@
     <div class="glass-panel" id="upload-panel">
       <div class="dropzone" id="dropzone">
         <div class="dropzone-icon">
-          <i data-lucide="file-text" style="width: 32px; height: 32px;"></i>
+          <i data-lucide="files" style="width: 32px; height: 32px;"></i>
         </div>
-        <h3>Arrastra tu archivo PDF aquí</h3>
-        <p>o haz clic para buscar en tu dispositivo</p>
-        <button class="btn btn-secondary btn-sm" id="browse-btn">Seleccionar Archivo</button>
-        <input type="file" id="file-input" accept="application/pdf" style="display: none;">
+        <h3>Arrastra tus archivos PDF aquí</h3>
+        <p>o haz clic para buscar en tu dispositivo (puedes seleccionar varios a la vez)</p>
+        <button class="btn btn-secondary btn-sm" id="browse-btn">Seleccionar Archivos PDF</button>
+        <input type="file" id="file-input" accept="application/pdf" multiple style="display: none;">
       </div>
 
       <!-- Loader -->
       <div class="loader-container" id="loader-container">
         <div class="loader"></div>
-        <p class="loader-text">Procesando documento y extrayendo campos...</p>
+        <p class="loader-text" id="loader-text">Procesando documentos y extrayendo campos...</p>
       </div>
     </div>
 
-    <!-- Data Form Panel (Glassmorphic, initially hidden) -->
-    <div class="glass-panel app-content" id="app-content">
-      <form id="pdf-form">
-        
-        <!-- Section 1: Cliente y Obra -->
+    <!-- Workspace Container (initially hidden) -->
+    <div class="workspace-container app-content" id="app-content">
+      <!-- Sidebar for loaded PDFs -->
+      <div class="glass-panel pdf-sidebar">
         <div class="section-header">
-          <i data-lucide="briefcase"></i>
-          <h2>Información del Cliente y Obra</h2>
+          <i data-lucide="list"></i>
+          <h2>Presupuestos Cargados</h2>
+        </div>
+        <div class="pdf-list-container" id="pdf-list-container">
+          <div class="pdf-list" id="pdf-list">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+      </div>
+
+      <!-- Main Form Details -->
+      <div class="glass-panel pdf-details-panel">
+        <form id="pdf-form">
+        
+        <!-- Section 1: Campos del Excel (BBDD) -->
+        <div class="section-header">
+          <i data-lucide="file-spreadsheet"></i>
+          <h2>Campos de Excel (Seguimiento)</h2>
         </div>
         <div class="form-grid">
-          <div class="form-group col-6">
-            <label for="empresa">Empresa / Cliente</label>
+          <div class="form-group col-3">
+            <label for="estado">Estado</label>
+            <select id="estado" class="form-control">
+              <option value="Sin Definir">Sin Definir</option>
+              <option value="Licitacion">Licitacion</option>
+              <option value="Potencial">Potencial</option>
+              <option value="Vendido">Vendido</option>
+              <option value="No Vendido">No Vendido</option>
+            </select>
+          </div>
+          <div class="form-group col-3">
+            <label for="orden">Orden</label>
+            <input type="text" id="orden" class="form-control" placeholder="Autogenerado" readonly>
+          </div>
+          <div class="form-group col-3">
+            <label for="fecha">Fecha</label>
+            <input type="text" id="fecha" class="form-control" placeholder="No detectada">
+          </div>
+          <div class="form-group col-3">
+            <label for="presupuesto">Nº de Presupuesto</label>
+            <input type="text" id="presupuesto" class="form-control" placeholder="No detectado">
+          </div>
+
+          <div class="form-group col-8">
+            <label for="empresa">Nombre y/o Empresa</label>
             <input type="text" id="empresa" class="form-control" placeholder="No detectado">
           </div>
-          <div class="form-group col-6">
-            <label for="contacto">Nombre de Contacto</label>
+          <div class="form-group col-4">
+            <label for="metros">M2</label>
+            <input type="text" id="metros" class="form-control" placeholder="No detectado">
+          </div>
+
+          <div class="form-group col-4">
+            <label for="material">Material</label>
+            <input type="text" id="material" class="form-control" placeholder="Ej. Mármol, Granito">
+          </div>
+          <div class="form-group col-8">
+            <label for="obra">Zona de Obra</label>
+            <input type="text" id="obra" class="form-control" placeholder="No detectado">
+          </div>
+
+          <div class="form-group col-4">
+            <label for="contacto">Contacto</label>
             <input type="text" id="contacto" class="form-control" placeholder="No detectado">
           </div>
           <div class="form-group col-4">
-            <label for="mail">Correo Electrónico</label>
+            <label for="mail">Email</label>
             <input type="email" id="mail" class="form-control" placeholder="No detectado">
-          </div>
-          <div class="form-group col-4">
-            <label for="dominio">Dominio Corporativo</label>
-            <input type="text" id="dominio" class="form-control" placeholder="No detectado">
           </div>
           <div class="form-group col-4">
             <label for="telf">Teléfono</label>
             <input type="text" id="telf" class="form-control" placeholder="No detectado">
           </div>
-          <div class="form-group col-6">
-            <label for="ref">Referencia (Ref.)</label>
-            <input type="text" id="ref" class="form-control" placeholder="No detectado">
+
+          <div class="form-group col-4">
+            <label for="objetivo">Objetivo Próxima Gestión</label>
+            <input type="text" id="objetivo" class="form-control" placeholder="Ej. Llamar el lunes">
           </div>
-          <div class="form-group col-3">
-            <label for="presupuesto">Nº Presupuesto</label>
-            <input type="text" id="presupuesto" class="form-control" placeholder="No detectado">
+          <div class="form-group col-4">
+            <label for="detalle">Detalle/ Resultados</label>
+            <input type="text" id="detalle" class="form-control" placeholder="Ej. Esperando respuesta">
           </div>
-          <div class="form-group col-3">
-            <label for="cint">C.Int.</label>
-            <input type="text" id="cint" class="form-control" placeholder="No detectado">
-          </div>
-          <div class="form-group col-12">
-            <label for="obra">Obra</label>
-            <input type="text" id="obra" class="form-control" placeholder="No detectado">
+          <div class="form-group col-4">
+            <label for="fecha_resultados">Fecha de Resultados</label>
+            <input type="text" id="fecha_resultados" class="form-control" placeholder="DD/MM/YYYY">
           </div>
         </div>
 
-        <!-- Section 2: Fechas, Cantidades y Valores -->
-        <div class="section-header">
-          <i data-lucide="calendar-range"></i>
-          <h2>Fechas, Cantidades y Valores</h2>
-        </div>
-        <div class="form-grid">
-          <div class="form-group col-3">
-            <label for="fecha">Fecha de Emisión</label>
-            <input type="text" id="fecha" class="form-control" placeholder="No detectado">
-          </div>
-          <div class="form-group col-3">
-            <label for="fecha_vencimiento">Fecha de Vencimiento</label>
-            <input type="text" id="fecha_vencimiento" class="form-control" placeholder="No detectado">
-          </div>
-          <div class="form-group col-3">
-            <label for="metros">Metros Cuadrados (m²)</label>
-            <input type="text" id="metros" class="form-control" placeholder="No detectado">
-          </div>
-          <div class="form-group col-3">
-            <label for="total">Total del Presupuesto</label>
-            <input type="text" id="total" class="form-control" placeholder="No detectado">
-          </div>
-        </div>
+        <!-- Collapsible Section: Otros Datos Extraídos (Opcionales) -->
+        <div class="collapsible-section">
+          <button type="button" class="btn btn-secondary btn-block" id="toggle-optional-btn" style="width: 100%; display: flex; justify-content: space-between; align-items: center; padding: 1rem 1.5rem; margin-bottom: 1.5rem; border-radius: 14px;">
+            <span style="display: flex; align-items: center; gap: 0.5rem;">
+              <i data-lucide="eye" style="width: 18px; height: 18px;"></i> Ver Otros Datos Extraídos (Opcionales)
+            </span>
+            <i data-lucide="chevron-down" id="optional-chevron" style="transition: transform 0.3s ease;"></i>
+          </button>
+          
+          <div class="collapsible-content" id="optional-content" style="display: none; animation: fadeIn 0.3s ease;">
+            <div class="form-grid">
+              <div class="form-group col-4">
+                <label for="dominio">Dominio Corporativo</label>
+                <input type="text" id="dominio" class="form-control" placeholder="No detectado">
+              </div>
+              <div class="form-group col-4">
+                <label for="ref">Referencia (Ref.)</label>
+                <input type="text" id="ref" class="form-control" placeholder="No detectado">
+              </div>
+              <div class="form-group col-4">
+                <label for="cint">C.Int.</label>
+                <input type="text" id="cint" class="form-control" placeholder="No detectado">
+              </div>
 
-        <!-- Section 3: Observaciones y Condiciones -->
-        <div class="section-header">
-          <i data-lucide="file-edit"></i>
-          <h2>Observaciones y Condiciones Generales</h2>
-        </div>
-        <div class="form-grid">
-          <div class="form-group col-12">
-            <label for="observaciones">Observaciones (Contenido Completo)</label>
-            <textarea id="observaciones" class="form-control" rows="4" placeholder="No detectado"></textarea>
-          </div>
-          <div class="form-group col-12">
-            <label for="condiciones">Condiciones Generales (Contenido Completo)</label>
-            <textarea id="condiciones" class="form-control" rows="5" placeholder="No detectado"></textarea>
-          </div>
-          <div class="form-group col-4">
-            <label for="entrega">Entrega</label>
-            <input type="text" id="entrega" class="form-control" placeholder="No detectado">
-          </div>
-          <div class="form-group col-4">
-            <label for="forma_pago">Forma de Pago</label>
-            <input type="text" id="forma_pago" class="form-control" placeholder="No detectado">
-          </div>
-          <div class="form-group col-4">
-            <label for="mano_obra">Mano de Obra</label>
-            <input type="text" id="mano_obra" class="form-control" placeholder="No detectado">
-          </div>
-          <div class="form-group col-6">
-            <label for="mayores_costos">Mayores Costos</label>
-            <input type="text" id="mayores_costos" class="form-control" placeholder="No detectado">
-          </div>
-          <div class="form-group col-6">
-            <label for="validez">Validez de la Oferta</label>
-            <input type="text" id="validez" class="form-control" placeholder="No detectado">
+              <div class="form-group col-4">
+                <label for="fecha_vencimiento">Fecha de Vencimiento</label>
+                <input type="text" id="fecha_vencimiento" class="form-control" placeholder="No detectado">
+              </div>
+              <div class="form-group col-4">
+                <label for="total">Total del Presupuesto</label>
+                <input type="text" id="total" class="form-control" placeholder="No detectado">
+              </div>
+              <div class="form-group col-4">
+                <label for="validez">Validez de la Oferta</label>
+                <input type="text" id="validez" class="form-control" placeholder="No detectado">
+              </div>
+
+              <div class="form-group col-4">
+                <label for="entrega">Entrega</label>
+                <input type="text" id="entrega" class="form-control" placeholder="No detectado">
+              </div>
+              <div class="form-group col-4">
+                <label for="forma_pago">Forma de Pago</label>
+                <input type="text" id="forma_pago" class="form-control" placeholder="No detectado">
+              </div>
+              <div class="form-group col-4">
+                <label for="mano_obra">Mano de Obra</label>
+                <input type="text" id="mano_obra" class="form-control" placeholder="No detectado">
+              </div>
+              <div class="form-group col-12">
+                <label for="mayores_costos">Mayores Costos</label>
+                <input type="text" id="mayores_costos" class="form-control" placeholder="No detectado">
+              </div>
+
+              <div class="form-group col-12">
+                <label for="observaciones">Observaciones</label>
+                <textarea id="observaciones" class="form-control" rows="3" placeholder="No detectado"></textarea>
+              </div>
+              <div class="form-group col-12">
+                <label for="condiciones">Condiciones Generales</label>
+                <textarea id="condiciones" class="form-control" rows="3" placeholder="No detectado"></textarea>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -215,12 +251,13 @@
           <button type="button" class="btn btn-success" id="copy-json-btn">
             <i data-lucide="copy" style="width: 18px; height: 18px;"></i> Copiar Datos (JSON)
           </button>
-          <button type="button" class="btn btn-hubspot" id="sync-hubspot-btn">
-            <i data-lucide="refresh-cw" style="width: 18px; height: 18px;"></i> Sincronizar con HubSpot
+          <button type="button" class="btn btn-success" id="export-excel-btn">
+            <i data-lucide="file-spreadsheet" style="width: 18px; height: 18px;"></i> Guardar en Excel
           </button>
         </div>
       </form>
-    </div>
+      </div> <!-- Close .pdf-details-panel -->
+    </div> <!-- Close .workspace-container -->
 
     <!-- Footer -->
     <footer>
@@ -236,13 +273,15 @@
     <span id="toast-message">Copiado con éxito!</span>
   </div>
 
+  <!-- Load ExcelJS for template-preserving Excel support -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.3.0/exceljs.min.js"></script>
   <!-- Load PDF.js from official Cloudflare/Mozilla CDN -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js"></script>
   <script>
     // Configure PDF.js worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
   </script>
-  <script src="app.js?v=1.2"></script>
+  <script src="app.js?v=1.3"></script>
   <script>
     // Initialize Lucide icons
     lucide.createIcons();

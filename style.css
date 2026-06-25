@@ -478,7 +478,7 @@ footer a:hover {
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* HubSpot Integration UI Styles */
+/* Excel & Workspace UI Styles */
 .settings-toggle-container {
   display: flex;
   justify-content: flex-end;
@@ -497,46 +497,6 @@ footer a:hover {
   to { opacity: 1; transform: translateY(0); }
 }
 
-.password-input-container {
-  position: relative;
-  width: 100%;
-}
-
-.password-input-container input {
-  padding-right: 2.75rem;
-}
-
-.btn-toggle-password {
-  position: absolute;
-  right: 0.75rem;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  color: var(--text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.25rem;
-  transition: color var(--transition-speed);
-}
-
-.btn-toggle-password:hover {
-  color: var(--text-primary);
-}
-
-.btn-hubspot {
-  background: linear-gradient(135deg, #ff9e7a 0%, #ff7a59 100%);
-  box-shadow: 0 4px 15px rgba(255, 122, 89, 0.3);
-}
-
-.btn-hubspot:hover {
-  background: linear-gradient(135deg, #ffb091 0%, #ff8c6e 100%);
-  box-shadow: 0 6px 20px rgba(255, 122, 89, 0.4);
-  transform: translateY(-1px);
-}
-
 .help-text {
   font-size: 0.8rem;
   color: var(--text-secondary);
@@ -545,4 +505,158 @@ footer a:hover {
 /* Spinner Rotate class */
 .spin {
   animation: spin 1s linear infinite !important;
+}
+
+/* Workspace Grid Layout */
+.workspace-container {
+  display: grid;
+  grid-template-columns: 350px 1fr;
+  gap: 1.5rem;
+  align-items: start;
+  width: 100%;
+}
+
+.pdf-sidebar {
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem !important;
+  max-height: 800px;
+}
+
+.pdf-details-panel {
+  padding: 2.5rem !important;
+}
+
+/* PDF List Styles */
+.pdf-list-container {
+  overflow-y: auto;
+  max-height: 600px;
+  padding-right: 0.25rem;
+}
+
+.pdf-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.pdf-item {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+  padding: 0.85rem 1rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  position: relative;
+  transition: all var(--transition-speed) ease;
+}
+
+.pdf-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.pdf-item.active {
+  background: rgba(99, 102, 241, 0.15);
+  border-color: var(--accent-color);
+  box-shadow: 0 4px 15px rgba(99, 102, 241, 0.1);
+}
+
+.pdf-item-content {
+  flex-grow: 1;
+  min-width: 0; /* truncate text inside */
+}
+
+.pdf-item-title {
+  font-size: 0.95rem;
+  font-weight: 500;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-bottom: 0.15rem;
+}
+
+.pdf-item-meta {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  gap: 0.5rem;
+}
+
+.pdf-status-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.pdf-item.status-loading .pdf-status-icon {
+  color: var(--accent-color);
+  background: rgba(99, 102, 241, 0.1);
+}
+
+.pdf-item.status-success .pdf-status-icon {
+  color: var(--success-color);
+  background: rgba(16, 185, 129, 0.1);
+}
+
+.pdf-item.status-error .pdf-status-icon {
+  color: var(--danger-color);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.btn-remove-pdf {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.25rem;
+  border-radius: 6px;
+  transition: all var(--transition-speed);
+  opacity: 0; /* hide by default */
+}
+
+.pdf-item:hover .btn-remove-pdf {
+  opacity: 1;
+}
+
+.btn-remove-pdf:hover {
+  color: var(--danger-color);
+  background: rgba(239, 68, 68, 0.1);
+}
+
+@media (max-width: 1024px) {
+  .workspace-container {
+    grid-template-columns: 1fr;
+  }
+  .pdf-sidebar {
+    max-height: 400px;
+  }
+}
+
+/* Collapsible Section Optional Fields */
+.collapsible-section {
+  width: 100%;
+  margin-top: 1rem;
+}
+
+.collapsible-content {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--panel-border);
+  border-radius: 14px;
+  padding: 2rem 1.5rem;
+  margin-bottom: 1.5rem;
 }

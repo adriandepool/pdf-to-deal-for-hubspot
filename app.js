@@ -3,6 +3,7 @@ const dropzone = document.getElementById('dropzone');
 const fileInput = document.getElementById('file-input');
 const browseBtn = document.getElementById('browse-btn');
 const loaderContainer = document.getElementById('loader-container');
+const loaderText = document.getElementById('loader-text');
 const appContent = document.getElementById('app-content');
 const pdfForm = document.getElementById('pdf-form');
 const resetBtn = document.getElementById('reset-btn');
@@ -11,49 +12,125 @@ const copyJsonBtn = document.getElementById('copy-json-btn');
 const toast = document.getElementById('toast');
 const toastMessage = document.getElementById('toast-message');
 
-// HubSpot DOM Elements
+// Excel and Sidebar DOM Elements
 const toggleSettingsBtn = document.getElementById('toggle-settings-btn');
 const settingsPanel = document.getElementById('settings-panel');
-const hubspotTokenInput = document.getElementById('hubspot-token');
-const hubspotCorsMethodSelect = document.getElementById('hubspot-cors-method');
-const proxyUrlGroup = document.getElementById('proxy-url-group');
-const hubspotProxyUrlInput = document.getElementById('hubspot-proxy-url');
-const hubspotPipelineInput = document.getElementById('hubspot-pipeline');
-const hubspotStageInput = document.getElementById('hubspot-stage');
 const saveSettingsBtn = document.getElementById('save-settings-btn');
-const togglePasswordBtn = document.getElementById('toggle-password-btn');
-const syncHubspotBtn = document.getElementById('sync-hubspot-btn');
+const excelInput = document.getElementById('excel-input');
+const btnSelectExcel = document.getElementById('btn-select-excel');
+const excelFilename = document.getElementById('excel-filename');
+const excelSheetSelect = document.getElementById('excel-sheet-select');
+const pdfList = document.getElementById('pdf-list');
+const pdfListContainer = document.getElementById('pdf-list-container');
+const exportExcelBtn = document.getElementById('export-excel-btn');
 
-// Load HubSpot settings from localStorage
-function loadHubSpotSettings() {
-  const token = localStorage.getItem('hs_token') || '';
-  const corsMethod = localStorage.getItem('hs_cors_method') || 'direct';
-  const proxyUrl = localStorage.getItem('hs_proxy_url') || '';
-  const pipeline = localStorage.getItem('hs_pipeline') || 'default';
-  const stage = localStorage.getItem('hs_stage') || 'appointmentscheduled';
+// App State
+let processedPDFs = [];
+let activePDFId = null;
+let selectedExcelFile = null;
+let excelWorkbook = null;
+let selectedSheetName = "";
 
-  hubspotTokenInput.value = token;
-  hubspotCorsMethodSelect.value = corsMethod;
-  hubspotProxyUrlInput.value = proxyUrl;
-  hubspotPipelineInput.value = pipeline;
-  hubspotStageInput.value = stage;
+// Safe LocalStorage wrapper to handle cases where browser tracking protection blocks access
+const safeStorage = {
+  getItem(key) {
+    try {
+      return localStorage.getItem(key);
+    } catch (e) {
+      console.warn("Storage access blocked by browser settings:", e);
+      return null;
+    }
+  },
+  setItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      console.warn("Storage write blocked by browser settings:", e);
+    }
+  }
+};
 
-  // Show/hide proxy URL field based on method
-  proxyUrlGroup.style.display = corsMethod === 'proxy' ? 'block' : 'none';
+// Load Excel Settings from storage (Sheet name selection preference)
+function loadExcelSettings() {
+  const savedSheet = safeStorage.getItem('excel_sheet_name') || '';
+  if (savedSheet && excelWorkbook) {
+    const sheetExists = excelWorkbook.worksheets.some(w => w.name === savedSheet);
+    if (sheetExists) {
+      excelSheetSelect.value = savedSheet;
+      selectedSheetName = savedSheet;
+    }
+  }
 }
 
-// Save HubSpot settings to localStorage
-function saveHubSpotSettings() {
-  localStorage.setItem('hs_token', hubspotTokenInput.value.trim());
-  localStorage.setItem('hs_cors_method', hubspotCorsMethodSelect.value);
-  localStorage.setItem('hs_proxy_url', hubspotProxyUrlInput.value.trim());
-  localStorage.setItem('hs_pipeline', hubspotPipelineInput.value.trim());
-  localStorage.setItem('hs_stage', hubspotStageInput.value.trim());
+// Select Excel File trigger
+btnSelectExcel.addEventListener('click', () => {
+  excelInput.click();
+});
 
-  showToast('Configuración de HubSpot guardada con éxito.', 'check-circle');
-}
+// Parse Excel File on Selection using ExcelJS
+excelInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
 
-// Toggle settings panel visibility
+  selectedExcelFile = file;
+  excelFilename.textContent = "Cargando archivo...";
+  excelSheetSelect.disabled = true;
+  excelSheetSelect.innerHTML = '<option value="">Cargando hojas...</option>';
+
+  const reader = new FileReader();
+  reader.onload = async (evt) => {
+    try {
+      const buffer = evt.target.result;
+      excelWorkbook = new ExcelJS.Workbook();
+      await excelWorkbook.xlsx.load(buffer);
+      
+      const sheetNames = excelWorkbook.worksheets.map(w => w.name);
+      
+      // Populate sheets dropdown
+      excelSheetSelect.innerHTML = '';
+      sheetNames.forEach(name => {
+        const option = document.createElement('option');
+        option.value = name;
+        option.textContent = name;
+        excelSheetSelect.appendChild(option);
+      });
+      excelSheetSelect.disabled = false;
+
+      // Select first sheet by default or restore from storage
+      const savedSheet = safeStorage.getItem('excel_sheet_name');
+      if (savedSheet && sheetNames.includes(savedSheet)) {
+        excelSheetSelect.value = savedSheet;
+      } else if (sheetNames.length > 0) {
+        excelSheetSelect.value = sheetNames[0];
+      }
+      selectedSheetName = excelSheetSelect.value;
+      
+      excelFilename.textContent = `${file.name} (${sheetNames.length} hojas)`;
+      showToast('Archivo Excel cargado correctamente.', 'check-circle');
+    } catch (err) {
+      console.error("Error reading Excel:", err);
+      excelFilename.textContent = "Error al cargar archivo.";
+      excelSheetSelect.disabled = true;
+      excelSheetSelect.innerHTML = '<option value="">Error</option>';
+      showToast('Error al parsear el archivo Excel.', 'x-circle');
+    }
+  };
+  
+  reader.onerror = () => {
+    excelFilename.textContent = "Error de lectura.";
+    showToast('No se pudo leer el archivo Excel.', 'x-circle');
+  };
+  
+  reader.readAsArrayBuffer(file);
+});
+
+// Sheet Selection Change
+excelSheetSelect.addEventListener('change', (e) => {
+  selectedSheetName = e.target.value;
+  safeStorage.setItem('excel_sheet_name', selectedSheetName);
+});
+
+// Toggle Excel settings panel visibility
 toggleSettingsBtn.addEventListener('click', () => {
   const isHidden = settingsPanel.style.display === 'none';
   settingsPanel.style.display = isHidden ? 'block' : 'none';
@@ -61,57 +138,63 @@ toggleSettingsBtn.addEventListener('click', () => {
   toggleSettingsBtn.classList.toggle('btn-secondary', !isHidden);
 });
 
-// Toggle password visibility
-togglePasswordBtn.addEventListener('click', () => {
-  const isPassword = hubspotTokenInput.type === 'password';
-  hubspotTokenInput.type = isPassword ? 'text' : 'password';
-  
-  // Update icon
-  const icon = togglePasswordBtn.querySelector('i');
-  icon.setAttribute('data-lucide', isPassword ? 'eye-off' : 'eye');
-  lucide.createIcons();
-});
-
-// Show/hide proxy URL field based on connection method change
-hubspotCorsMethodSelect.addEventListener('change', (e) => {
-  proxyUrlGroup.style.display = e.target.value === 'proxy' ? 'block' : 'none';
-});
-
 // Save settings button event
 saveSettingsBtn.addEventListener('click', () => {
-  saveHubSpotSettings();
   settingsPanel.style.display = 'none';
   toggleSettingsBtn.classList.remove('btn-primary');
   toggleSettingsBtn.classList.add('btn-secondary');
+  showToast('Configuración guardada.', 'check-circle');
 });
 
 // Load settings on startup
 document.addEventListener('DOMContentLoaded', () => {
-  loadHubSpotSettings();
+  loadExcelSettings();
 });
+
+// Toggle Optional Fields Section
+const toggleOptionalBtn = document.getElementById('toggle-optional-btn');
+const optionalContent = document.getElementById('optional-content');
+const optionalChevron = document.getElementById('optional-chevron');
+
+if (toggleOptionalBtn && optionalContent && optionalChevron) {
+  toggleOptionalBtn.addEventListener('click', () => {
+    const isHidden = optionalContent.style.display === 'none';
+    optionalContent.style.display = isHidden ? 'block' : 'none';
+    optionalChevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+  });
+}
 
 // Form Input Elements
 const fields = {
+  // Excel core fields
+  estado: document.getElementById('estado'),
+  orden: document.getElementById('orden'),
+  fecha: document.getElementById('fecha'),
+  presupuesto: document.getElementById('presupuesto'),
+  metros: document.getElementById('metros'),
+  material: document.getElementById('material'),
   empresa: document.getElementById('empresa'),
+  obra: document.getElementById('obra'),
   contacto: document.getElementById('contacto'),
   mail: document.getElementById('mail'),
-  dominio: document.getElementById('dominio'),
   telf: document.getElementById('telf'),
+  objetivo: document.getElementById('objetivo'),
+  detalle: document.getElementById('detalle'),
+  fecha_resultados: document.getElementById('fecha_resultados'),
+
+  // Optional fields
+  dominio: document.getElementById('dominio'),
   ref: document.getElementById('ref'),
-  presupuesto: document.getElementById('presupuesto'),
   cint: document.getElementById('cint'),
-  obra: document.getElementById('obra'),
-  fecha: document.getElementById('fecha'),
   fecha_vencimiento: document.getElementById('fecha_vencimiento'),
-  metros: document.getElementById('metros'),
   total: document.getElementById('total'),
-  observaciones: document.getElementById('observaciones'),
-  condiciones: document.getElementById('condiciones'),
   entrega: document.getElementById('entrega'),
   forma_pago: document.getElementById('forma_pago'),
   mano_obra: document.getElementById('mano_obra'),
   mayores_costos: document.getElementById('mayores_costos'),
-  validez: document.getElementById('validez')
+  validez: document.getElementById('validez'),
+  observaciones: document.getElementById('observaciones'),
+  condiciones: document.getElementById('condiciones')
 };
 
 // Drag and Drop Event Listeners
@@ -127,11 +210,11 @@ dropzone.addEventListener('dragleave', () => {
 dropzone.addEventListener('drop', (e) => {
   e.preventDefault();
   dropzone.classList.remove('dragover');
-  const files = e.dataTransfer.files;
-  if (files.length > 0 && files[0].type === 'application/pdf') {
-    processPDF(files[0]);
+  const files = Array.from(e.dataTransfer.files).filter(file => file.type === 'application/pdf');
+  if (files.length > 0) {
+    processMultiplePDFs(files);
   } else {
-    showToast('Por favor, arrastra un archivo PDF válido.', 'x-circle');
+    showToast('Por favor, arrastra archivos PDF válidos.', 'x-circle');
   }
 });
 
@@ -146,14 +229,18 @@ dropzone.addEventListener('click', () => {
 });
 
 fileInput.addEventListener('change', (e) => {
-  if (e.target.files.length > 0) {
-    processPDF(e.target.files[0]);
+  const files = Array.from(e.target.files).filter(file => file.type === 'application/pdf');
+  if (files.length > 0) {
+    processMultiplePDFs(files);
   }
 });
 
 // Reset Button Event Listener
 resetBtn.addEventListener('click', () => {
   pdfForm.reset();
+  processedPDFs = [];
+  activePDFId = null;
+  renderPDFList();
   appContent.classList.remove('visible');
   dropzone.style.display = 'flex';
   fileInput.value = '';
@@ -162,11 +249,16 @@ resetBtn.addEventListener('click', () => {
   if (existingDetails) {
     existingDetails.remove();
   }
-  showToast('Formulario restablecido.', 'info');
+  showToast('Formulario y listado restablecidos.', 'info');
 });
 
 // Clipboard Action - Formatted Text
 copyTextBtn.addEventListener('click', () => {
+  if (!activePDFId) {
+    showToast('No hay ningún presupuesto seleccionado.', 'alert-triangle');
+    return;
+  }
+  
   let textData = `DATOS EXTRAÍDOS DEL PRESUPUESTO
 -----------------------------------
 Empresa: ${fields.empresa.value}
@@ -202,6 +294,11 @@ Validez de la oferta: ${fields.validez.value}`;
 
 // Clipboard Action - JSON
 copyJsonBtn.addEventListener('click', () => {
+  if (!activePDFId) {
+    showToast('No hay ningún presupuesto seleccionado.', 'alert-triangle');
+    return;
+  }
+
   const jsonData = {};
   Object.keys(fields).forEach(key => {
     jsonData[key] = fields[key].value;
@@ -212,36 +309,22 @@ copyJsonBtn.addEventListener('click', () => {
     .catch(err => console.error('Error al copiar JSON: ', err));
 });
 
-// Sync with HubSpot Action
-syncHubspotBtn.addEventListener('click', async () => {
-  const token = hubspotTokenInput.value.trim();
-  if (!token) {
-    showToast('Por favor, ingresa tu token en la configuración de HubSpot.', 'alert-triangle');
-    settingsPanel.style.display = 'block';
-    toggleSettingsBtn.classList.remove('btn-secondary');
-    toggleSettingsBtn.classList.add('btn-primary');
-    hubspotTokenInput.focus();
-    return;
-  }
-
-  const originalHtml = syncHubspotBtn.innerHTML;
-  syncHubspotBtn.disabled = true;
-  syncHubspotBtn.innerHTML = `<i data-lucide="loader-2" class="spin" style="width: 18px; height: 18px;"></i> Sincronizando...`;
-  lucide.createIcons();
-
-  try {
-    await syncToHubspot();
-  } catch (error) {
-    console.error('HubSpot Sync Flow Error:', error);
-    if (error.message.includes('Failed to fetch') || error.name === 'TypeError') {
-      showToast('Error de conexión (CORS). Activa tu extensión CORS o configura un proxy.', 'alert-triangle');
-    } else {
-      showToast(`Error: ${error.message}`, 'alert-triangle');
-    }
-  } finally {
-    syncHubspotBtn.disabled = false;
-    syncHubspotBtn.innerHTML = originalHtml;
-    lucide.createIcons();
+// Save Form Data to Active State Reactively
+Object.keys(fields).forEach(key => {
+  if (fields[key]) {
+    fields[key].addEventListener('input', () => {
+      if (activePDFId) {
+        const record = processedPDFs.find(p => p.id === activePDFId);
+        if (record && record.status === 'success') {
+          record.data[key] = fields[key].value;
+          
+          // Re-render list item if metadata properties change
+          if (key === 'empresa' || key === 'total') {
+            renderPDFList();
+          }
+        }
+      }
+    });
   }
 });
 
@@ -264,15 +347,32 @@ function recomputeExpiration() {
         const days = parseInt(daysMatch[1], 10);
         const expirationDate = new Date(docDate);
         expirationDate.setDate(docDate.getDate() + days);
-        fields.fecha_vencimiento.value = formatDate(expirationDate);
-      } else {
-        fields.fecha_vencimiento.value = '';
+        const formattedExp = formatDate(expirationDate);
+        fields.fecha_vencimiento.value = formattedExp;
+        fields.fecha_resultados.value = formattedExp;
+        
+        // Save to active state
+        if (activePDFId) {
+          const record = processedPDFs.find(p => p.id === activePDFId);
+          if (record && record.status === 'success') {
+            record.data.fecha_vencimiento = formattedExp;
+            record.data.fecha_resultados = formattedExp;
+          }
+        }
+        return;
       }
-    } else {
-      fields.fecha_vencimiento.value = '';
     }
-  } else {
-    fields.fecha_vencimiento.value = '';
+  }
+
+  // Clear if invalid or not computed
+  fields.fecha_vencimiento.value = '';
+  fields.fecha_resultados.value = '';
+  if (activePDFId) {
+    const record = processedPDFs.find(p => p.id === activePDFId);
+    if (record && record.status === 'success') {
+      record.data.fecha_vencimiento = '';
+      record.data.fecha_resultados = '';
+    }
   }
 }
 
@@ -280,29 +380,46 @@ function recomputeExpiration() {
 fields.fecha.addEventListener('input', recomputeExpiration);
 fields.validez.addEventListener('input', recomputeExpiration);
 
-// Core PDF processing function
-function processPDF(file) {
-  // Show file info in dropzone
-  const existingDetails = dropzone.querySelector('.file-info');
-  if (existingDetails) {
-    existingDetails.remove();
+// Process Multiple PDFs Flow
+function processMultiplePDFs(files) {
+  // Hide dropzone, show workspace
+  dropzone.style.display = 'none';
+  appContent.classList.add('visible');
+
+  files.forEach(file => {
+    const id = 'pdf_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    const record = {
+      id: id,
+      name: file.name,
+      size: file.size,
+      status: 'loading',
+      data: {
+        estado: 'Sin Definir', orden: '', fecha: '', presupuesto: '', metros: '', material: '',
+        empresa: '', obra: '', contacto: '', mail: '', telf: '', objetivo: '', detalle: '', fecha_resultados: '',
+        dominio: '', ref: '', cint: '', fecha_vencimiento: '', total: '', entrega: '',
+        forma_pago: '', mano_obra: '', mayores_costos: '', validez: '', observaciones: '', condiciones: ''
+      }
+    };
+    
+    processedPDFs.push(record);
+    parseSinglePDF(file, id);
+  });
+
+  renderPDFList();
+
+  // If no active PDF, select the first newly added one
+  if (!activePDFId && processedPDFs.length > 0) {
+    activePDFId = processedPDFs[processedPDFs.length - files.length].id;
+    selectPDF(activePDFId);
   }
+}
 
-  const fileInfo = document.createElement('div');
-  fileInfo.className = 'file-info';
-  fileInfo.innerHTML = `<i data-lucide="file-check2" style="width:16px;height:16px;"></i> <span>${file.name} (${(file.size / 1024).toFixed(1)} KB)</span>`;
-  dropzone.appendChild(fileInfo);
-  lucide.createIcons();
-
-  // Show loader and hide form
-  loaderContainer.style.display = 'flex';
-  appContent.classList.remove('visible');
-
+// Parse a single PDF document in the background
+function parseSinglePDF(file, id) {
   const reader = new FileReader();
   reader.onload = async function () {
     const typedarray = new Uint8Array(this.result);
     try {
-      // Load document using PDF.js
       const pdf = await pdfjsLib.getDocument(typedarray).promise;
       let fullText = '';
 
@@ -313,25 +430,34 @@ function processPDF(file) {
         fullText += pageText + '\n';
       }
 
-      console.log("Reconstructed PDF Text:\n", fullText);
-
-      // Extract and populate fields
       const extractedData = extractFieldsFromText(fullText);
-      populateForm(extractedData);
-
-      // Hide dropzone and loader, then show form
-      dropzone.style.display = 'none';
-      loaderContainer.style.display = 'none';
-      appContent.classList.add('visible');
       
-      showToast('Campos extraídos con éxito!', 'check-circle');
+      const record = processedPDFs.find(p => p.id === id);
+      if (record) {
+        record.status = 'success';
+        record.data = { ...record.data, ...extractedData };
+        
+        renderPDFList();
+        
+        if (activePDFId === id) {
+          populateForm(record.data);
+          toggleFormInputs(false);
+        }
+      }
     } catch (error) {
       console.error('Error al procesar PDF:', error);
-      loaderContainer.style.display = 'none';
-      showToast('Error al parsear el PDF. Revisa la consola.', 'alert-triangle');
+      const record = processedPDFs.find(p => p.id === id);
+      if (record) {
+        record.status = 'error';
+        record.errorMsg = error.message || 'Error al parsear el archivo';
+        renderPDFList();
+        if (activePDFId === id) {
+          toggleFormInputs(true);
+          showToast(`Error al procesar ${file.name}`, 'x-circle');
+        }
+      }
     }
   };
-  
   reader.readAsArrayBuffer(file);
 }
 
@@ -423,7 +549,7 @@ function extractFieldsFromText(text) {
   }
 
   // 2. Nombre de contacto
-  const contactMatch = text.match(/(?:Ate\.|Atn\.|Atención|Ate|At):\s*(.*?)(?=\s+Presupuesto|\s+N[º°o]|\s*N[º°o]|$)/i);
+  const contactMatch = text.match(/(?:Ate\.|Atn\.|Atención|Ate|At):\s*(.*?)(?=\s+Presupuesto|\s+N[º°o]|\s*N[º°o]|\r?\n|$)/i);
   extracted.contacto = contactMatch ? contactMatch[1].trim() : '';
 
   // 3. Presupuesto
@@ -438,20 +564,39 @@ function extractFieldsFromText(text) {
   extracted.dominio = extractDomain(extracted.mail);
 
   // 6. Telf
-  const telfMatch = text.match(/(?:Tel|Teléfono|Telf|Telefono|Cel|Celular):\s*(.*?)(?=\s+C\.Int\.:|\s+Obra|\s+Mail|$)/i);
+  const telfMatch = text.match(/(?:Tel|Teléfono|Telf|Telefono|Cel|Celular):\s*(.*?)(?=\s+C\.\s*Int\.:|\s+Obra|\s+Mail|\r?\n|$)/i);
   extracted.telf = telfMatch ? telfMatch[1].trim() : '';
 
   // 7. C.Int.
-  const cintMatch = text.match(/C\.Int\.:\s*([^\s]+)/i);
+  const cintMatch = text.match(/C\.\s*Int\.:\s*([^\s]+)/i);
   extracted.cint = cintMatch ? cintMatch[1].trim() : '';
 
   // 8. Obra
   const obraMatch = text.match(/Obra:\s*(.*)/i);
   extracted.obra = obraMatch ? obraMatch[1].trim() : '';
 
-  // 9. Metros cuadrados
-  const metrosMatch = text.match(/(?:m²|m2)\s+([\d.,]+)/i);
-  extracted.metros = metrosMatch ? metrosMatch[1].trim() : '';
+  // 9. Metros cuadrados y Material (desde la línea del item de m2)
+  let materialExtracted = '';
+  let metrosExtracted = '';
+  const lines = text.split('\n');
+  const itemRegex = /^(?:\d+[\s\.\-]*)?(.*?)\b(?:m²|m2)\s+([\d.,]+)\s+.*$/i;
+  
+  for (const line of lines) {
+    const match = line.match(itemRegex);
+    if (match) {
+      materialExtracted = match[1].trim();
+      metrosExtracted = match[2].trim();
+      break;
+    }
+  }
+
+  extracted.material = materialExtracted;
+  if (metrosExtracted) {
+    extracted.metros = metrosExtracted;
+  } else {
+    const metrosMatch = text.match(/(?:m²|m2)\s+([\d.,]+)/i);
+    extracted.metros = metrosMatch ? metrosMatch[1].trim() : '';
+  }
 
   // 10. Total
   const totalMatch = text.match(/(\$[\d,.]+)\s*\n\s*OBSERVACIONES/i) || text.match(/TOTAL\s*\n\s*(\$[\d,.]+)/i) || text.match(/TOTAL[:\s]+(\$[\d,.]+)/i);
@@ -486,14 +631,10 @@ function extractFieldsFromText(text) {
   extracted.validez = valMatch ? valMatch[1].trim() : '';
 
   // 18. Fecha del documento
-  console.log("Parsing Date from raw text...");
-  
-  // Try lenient Spanish date match first (no \b boundaries which can be problematic in JS with non-ASCII or comma context)
   let dateMatch = text.match(/(\d{1,2})\s+de\s+([a-zA-ZáéíóúñÑ]+)\s+de\s+(\d{4})/i);
   let parsedDocDate = null;
   
   if (dateMatch) {
-    console.log("Spanish Date Match Found:", dateMatch[0]);
     const day = parseInt(dateMatch[1], 10);
     const monthNames = {
       enero: 0, febrero: 1, marzo: 2, abril: 3, mayo: 4, junio: 5,
@@ -505,8 +646,6 @@ function extractFieldsFromText(text) {
       const year = parseInt(dateMatch[3], 10);
       parsedDocDate = new Date(year, month, day);
       extracted.fecha = formatDate(parsedDocDate);
-    } else {
-      console.log("Matched word is not a valid month:", monthKey);
     }
   }
 
@@ -514,7 +653,6 @@ function extractFieldsFromText(text) {
   if (!parsedDocDate) {
     const standardDateMatch = text.match(/\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})\b/) || text.match(/\b(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})\b/);
     if (standardDateMatch) {
-      console.log("Standard Date Match Found:", standardDateMatch[0]);
       let day, month, year;
       if (standardDateMatch[3].length === 4) {
         day = parseInt(standardDateMatch[1], 10);
@@ -534,7 +672,6 @@ function extractFieldsFromText(text) {
   }
 
   if (!parsedDocDate) {
-    console.log("No date detected.");
     extracted.fecha = '';
   }
 
@@ -546,14 +683,15 @@ function extractFieldsFromText(text) {
       const expirationDate = new Date(parsedDocDate);
       expirationDate.setDate(parsedDocDate.getDate() + days);
       extracted.fecha_vencimiento = formatDate(expirationDate);
-      console.log("Expiration calculated successfully:", extracted.fecha_vencimiento);
     } else {
-      console.log("Could not parse days from validez:", extracted.validez);
       extracted.fecha_vencimiento = '';
     }
   } else {
     extracted.fecha_vencimiento = '';
   }
+
+  // Populate fecha_resultados with computed expiration date
+  extracted.fecha_resultados = extracted.fecha_vencimiento;
 
   return extracted;
 }
@@ -567,16 +705,144 @@ function populateForm(data) {
   });
 }
 
+// Disable/enable form inputs
+function toggleFormInputs(disabled) {
+  Object.keys(fields).forEach(key => {
+    if (fields[key]) {
+      fields[key].disabled = disabled;
+    }
+  });
+  copyTextBtn.disabled = disabled;
+  copyJsonBtn.disabled = disabled;
+}
+
+// Sidebar PDF List Render
+function renderPDFList() {
+  pdfList.innerHTML = '';
+  if (processedPDFs.length === 0) {
+    pdfList.innerHTML = '<div style="color: var(--text-secondary); text-align: center; padding: 2rem 0; font-size: 0.9rem;">Ningún PDF cargado</div>';
+    return;
+  }
+
+  processedPDFs.forEach(pdf => {
+    const item = document.createElement('div');
+    item.className = `pdf-item status-${pdf.status}`;
+    if (pdf.id === activePDFId) {
+      item.classList.add('active');
+    }
+
+    let iconName = 'loader-2';
+    if (pdf.status === 'success') {
+      iconName = 'check-circle';
+    } else if (pdf.status === 'error') {
+      iconName = 'alert-triangle';
+    }
+
+    const metaEmpresa = pdf.status === 'success' ? (pdf.data.empresa || 'Empresa sin nombre') : (pdf.status === 'loading' ? 'Procesando...' : 'Error de lectura');
+    const metaTotal = pdf.status === 'success' ? (pdf.data.total || '') : '';
+
+    item.innerHTML = `
+      <div class="pdf-status-icon">
+        <i data-lucide="${iconName}" style="width: 16px; height: 16px;" class="${pdf.status === 'loading' ? 'spin' : ''}"></i>
+      </div>
+      <div class="pdf-item-content">
+        <div class="pdf-item-title" title="${pdf.name}">${pdf.name}</div>
+        <div class="pdf-item-meta">
+          <span>${metaEmpresa}</span>
+          ${metaTotal ? `• <span>${metaTotal}</span>` : ''}
+        </div>
+      </div>
+      <button type="button" class="btn-remove-pdf" title="Remover de la lista">
+        <i data-lucide="trash-2" style="width: 14px; height: 14px;"></i>
+      </button>
+    `;
+
+    // Click selector
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.btn-remove-pdf')) return;
+      selectPDF(pdf.id);
+    });
+
+    // Remove event
+    const removeBtn = item.querySelector('.btn-remove-pdf');
+    removeBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      removePDF(pdf.id);
+    });
+
+    pdfList.appendChild(item);
+  });
+
+  lucide.createIcons();
+}
+
+// Select active PDF and fill form
+function selectPDF(id) {
+  activePDFId = id;
+  
+  // Highlight in sidebar list
+  const items = pdfList.querySelectorAll('.pdf-item');
+  processedPDFs.forEach((pdf, index) => {
+    const item = items[index];
+    if (item) {
+      if (pdf.id === id) {
+        item.classList.add('active');
+      } else {
+        item.classList.remove('active');
+      }
+    }
+  });
+
+  const record = processedPDFs.find(p => p.id === id);
+  if (record) {
+    if (record.status === 'success') {
+      populateForm(record.data);
+      toggleFormInputs(false);
+    } else if (record.status === 'loading') {
+      pdfForm.reset();
+      toggleFormInputs(true);
+      showToast('Cargando datos...', 'info');
+    } else {
+      pdfForm.reset();
+      toggleFormInputs(true);
+      showToast('Documento con error.', 'x-circle');
+    }
+  }
+}
+
+// Remove a PDF from the list
+function removePDF(id) {
+  const index = processedPDFs.findIndex(p => p.id === id);
+  if (index === -1) return;
+
+  processedPDFs.splice(index, 1);
+
+  if (activePDFId === id) {
+    if (processedPDFs.length > 0) {
+      const nextIdx = Math.min(index, processedPDFs.length - 1);
+      activePDFId = processedPDFs[nextIdx].id;
+      selectPDF(activePDFId);
+    } else {
+      activePDFId = null;
+      pdfForm.reset();
+      dropzone.style.display = 'flex';
+      appContent.classList.remove('visible');
+      fileInput.value = '';
+    }
+  }
+
+  renderPDFList();
+  showToast('Presupuesto removido de la lista.', 'info');
+}
+
 // Show Toast feedback
 function showToast(message, iconName = 'check-circle') {
   toastMessage.textContent = message;
   
-  // Re-generate icon inside toast
   const iconContainer = toast.querySelector('.toast-icon');
   iconContainer.innerHTML = `<i data-lucide="${iconName}" style="width:20px;height:20px;"></i>`;
   lucide.createIcons();
 
-  // Style customization based on type
   if (iconName === 'x-circle' || iconName === 'alert-triangle') {
     toast.style.borderColor = 'var(--danger-color)';
     iconContainer.style.color = 'var(--danger-color)';
@@ -593,19 +859,6 @@ function showToast(message, iconName = 'check-circle') {
   setTimeout(() => {
     toast.classList.remove('show');
   }, 3500);
-}
-
-// Clean and normalize company name for comparison
-function normalizeCompanyName(name) {
-  if (!name) return '';
-  return name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "") // Remove accents
-    .replace(/[.,\/#!$%\^&\*;:{}=\-_`~()]/g, "") // Remove punctuation
-    .replace(/\b(s\s*a|s\s*r\s*l|s\s*a\s*s|ltda|inc|co|corp|fideicomiso|fideicomisos)\b/gi, '') // Suffixes
-    .replace(/\s+/g, ' ')
-    .trim();
 }
 
 // Clean money/currency format to a raw float string
@@ -634,239 +887,178 @@ function cleanAmount(amountStr) {
   return parseFloat(clean) || 0;
 }
 
-// Helper for making API calls to HubSpot through optional proxy
-async function apiCall(endpoint, options = {}) {
-  const token = hubspotTokenInput.value.trim();
-  const corsMethod = hubspotCorsMethodSelect.value;
-  const proxyUrl = hubspotProxyUrlInput.value.trim();
-  
-  let url = `https://api.hubapi.com${endpoint}`;
-  if (corsMethod === 'proxy' && proxyUrl) {
-    const formattedProxy = proxyUrl.endsWith('/') ? proxyUrl : proxyUrl + '/';
-    url = `${formattedProxy}https://api.hubapi.com${endpoint}`;
+// Append new records to selected sheet in existing workbook intelligently by modifying cells
+function appendToWorkbook(workbook, sheetName, newRecords) {
+  const sheet = workbook.getWorksheet(sheetName);
+  if (!sheet) {
+    throw new Error(`La hoja "${sheetName}" no existe en el archivo Excel.`);
   }
-  
-  const headers = {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}`
+
+  // Find the first empty row starting from row 5 (index 4) where core fields are empty
+  let r = 5;
+  while (r <= 10000) {
+    const cellFecha = sheet.getCell(`C${r}`);
+    const cellEmpresa = sheet.getCell(`G${r}`);
+    const cellPresupuesto = sheet.getCell(`D${r}`);
+
+    const isFechaEmpty = !cellFecha.value;
+    const isEmpresaEmpty = !cellEmpresa.value;
+    const isPresupuestoEmpty = !cellPresupuesto.value;
+
+    if (isFechaEmpty && isEmpresaEmpty && isPresupuestoEmpty) {
+      break;
+    }
+    r++;
+  }
+
+  console.log(`Guardando nuevos registros a partir de la fila ${r}`);
+
+  const colMapping = {
+    estado: 'A',
+    orden: 'B',
+    fecha: 'C',
+    presupuesto: 'D',
+    metros: 'E',
+    material: 'F',
+    empresa: 'G',
+    obra: 'H',
+    contacto: 'I',
+    mail: 'J',
+    telf: 'K',
+    objetivo: 'L',
+    detalle: 'M',
+    fecha_resultados: 'N'
   };
-  
-  const fetchOptions = {
-    ...options,
-    headers: {
-      ...headers,
-      ...options.headers
-    }
-  };
-  
-  const response = await fetch(url, fetchOptions);
-  if (!response.ok) {
-    const errText = await response.text();
-    let errJson = {};
-    try { errJson = JSON.parse(errText); } catch(e) {}
-    const errMsg = errJson.message || `HTTP error ${response.status}`;
-    throw new Error(errMsg);
-  }
-  
-  if (response.status === 204) {
-    return null;
-  }
-  
-  return await response.json();
-}
 
-// Main HubSpot Sync Flow
-async function syncToHubspot() {
-  let companyId = null;
-  let contactId = null;
-  
-  const empresaVal = fields.empresa.value.trim();
-  const mailVal = fields.mail.value.trim();
-  const contactoVal = fields.contacto.value.trim();
-  const telfVal = fields.telf.value.trim();
-  const dominioVal = fields.dominio.value.trim();
-  
-  // 1. Search or Create Company
-  if (empresaVal) {
-    console.log("HubSpot Sync: Searching for company...", empresaVal);
-    const normName = normalizeCompanyName(empresaVal);
-    let foundCompany = null;
-    
-    // Step A: Search by domain if present
-    if (dominioVal) {
-      try {
-        const domainSearchResult = await apiCall('/crm/v3/objects/companies/search', {
-          method: 'POST',
-          body: JSON.stringify({
-            filterGroups: [{
-              filters: [{
-                propertyName: 'domain',
-                operator: 'EQ',
-                value: dominioVal
-              }]
-            }],
-            properties: ['name', 'domain']
-          })
-        });
-        if (domainSearchResult && domainSearchResult.results.length > 0) {
-          foundCompany = domainSearchResult.results[0];
-          console.log("HubSpot Sync: Company found by domain:", foundCompany);
-        }
-      } catch (e) {
-        console.warn("Domain search failed, falling back to name search:", e);
+  newRecords.forEach((record, index) => {
+    const currentRow = r + index;
+
+    // Calculate sequential order number (Orden) automatically
+    let orderValue = "";
+    if (currentRow > 5) {
+      const prevCell = sheet.getCell(`B${currentRow - 1}`);
+      if (prevCell && prevCell.value && !isNaN(parseInt(prevCell.value))) {
+        orderValue = parseInt(prevCell.value) + 1;
+      } else {
+        orderValue = currentRow - 4;
       }
-    }
-    
-    // Step B: Search by name if not found by domain
-    if (!foundCompany && normName) {
-      const nameSearchResult = await apiCall('/crm/v3/objects/companies/search', {
-        method: 'POST',
-        body: JSON.stringify({
-          filterGroups: [{
-            filters: [{
-              propertyName: 'name',
-              operator: 'CONTAINS_TOKEN',
-              value: normName
-            }]
-          }],
-          properties: ['name', 'domain']
-        })
-      });
-      
-      if (nameSearchResult && nameSearchResult.results.length > 0) {
-        foundCompany = nameSearchResult.results.find(c => {
-          return normalizeCompanyName(c.properties.name) === normName;
-        });
-        if (foundCompany) {
-          console.log("HubSpot Sync: Company found by name matching:", foundCompany);
-        }
-      }
-    }
-    
-    if (foundCompany) {
-      companyId = foundCompany.id;
     } else {
-      // Step C: Create Company
-      console.log("HubSpot Sync: Company not found. Creating company...", empresaVal);
-      const companyCreateResult = await apiCall('/crm/v3/objects/companies', {
-        method: 'POST',
-        body: JSON.stringify({
-          properties: {
-            name: empresaVal,
-            domain: dominioVal
-          }
-        })
-      });
-      companyId = companyCreateResult.id;
-      console.log("HubSpot Sync: Company created successfully with ID:", companyId);
+      orderValue = 1;
     }
-  }
 
-  // 2. Search or Create Contact
-  if (mailVal) {
-    console.log("HubSpot Sync: Searching for contact by email...", mailVal);
-    const contactSearchResult = await apiCall('/crm/v3/objects/contacts/search', {
-      method: 'POST',
-      body: JSON.stringify({
-        filterGroups: [{
-          filters: [{
-            propertyName: 'email',
-            operator: 'EQ',
-            value: mailVal
-          }]
-        }],
-        properties: ['firstname', 'lastname', 'email']
-      })
+    const dataWithOrder = {
+      ...record,
+      orden: orderValue,
+      estado: record.estado || "Sin Definir"
+    };
+
+    // Write columns A to N into cells directly
+    Object.keys(colMapping).forEach(key => {
+      const col = colMapping[key];
+      const cell = sheet.getCell(`${col}${currentRow}`);
+      const val = dataWithOrder[key] || "";
+      cell.value = val;
     });
-    
-    if (contactSearchResult && contactSearchResult.results.length > 0) {
-      contactId = contactSearchResult.results[0].id;
-      console.log("HubSpot Sync: Contact found with ID:", contactId);
-    } else {
-      // Create Contact
-      console.log("HubSpot Sync: Contact not found. Creating contact...", mailVal);
-      let firstname = contactoVal || 'Contacto Presupuesto';
-      let lastname = '';
-      const spaceIdx = contactoVal.indexOf(' ');
-      if (spaceIdx > 0) {
-        firstname = contactoVal.substring(0, spaceIdx);
-        lastname = contactoVal.substring(spaceIdx + 1);
-      }
-      
-      const contactCreateResult = await apiCall('/crm/v3/objects/contacts', {
-        method: 'POST',
-        body: JSON.stringify({
-          properties: {
-            email: mailVal,
-            firstname: firstname,
-            lastname: lastname,
-            phone: telfVal
-          }
-        })
-      });
-      contactId = contactCreateResult.id;
-      console.log("HubSpot Sync: Contact created successfully with ID:", contactId);
+
+    // Write DAYS formula in column O: =DAYS(TODAY(), N<row>) if empty
+    const cellO = sheet.getCell(`O${currentRow}`);
+    if (!cellO.value) {
+      cellO.value = { formula: `DAYS(TODAY(),N${currentRow})` };
     }
-  }
-
-  // 3. Associate Contact to Company (if both exist)
-  if (contactId && companyId) {
-    console.log(`HubSpot Sync: Associating Contact (${contactId}) to Company (${companyId})...`);
-    await apiCall(`/crm/v3/objects/contacts/${contactId}/associations/companies/${companyId}/contact_to_company`, {
-      method: 'PUT'
-    });
-    console.log("HubSpot Sync: Contact and Company associated.");
-  }
-
-  // 4. Create Deal
-  console.log("HubSpot Sync: Creating deal...");
-  const presupuestoNum = fields.presupuesto.value.trim() || 'S/N';
-  const empresaName = fields.empresa.value.trim();
-  const obraVal = fields.obra.value.trim();
-  const refVal = fields.ref.value.trim();
-  
-  let dealName = `Presupuesto Nº ${presupuestoNum}`;
-  if (empresaName) dealName += ` - ${empresaName}`;
-  if (obraVal) {
-    dealName += ` - ${obraVal}`;
-  } else if (refVal) {
-    dealName += ` - ${refVal}`;
-  }
-  
-  const amountVal = cleanAmount(fields.total.value);
-  const pipelineVal = hubspotPipelineInput.value.trim() || 'default';
-  const stageVal = hubspotStageInput.value.trim() || 'appointmentscheduled';
-  
-  const dealCreateResult = await apiCall('/crm/v3/objects/deals', {
-    method: 'POST',
-    body: JSON.stringify({
-      properties: {
-        dealname: dealName,
-        amount: amountVal.toString(),
-        dealstage: stageVal,
-        pipeline: pipelineVal
-      }
-    })
   });
-  
-  const dealId = dealCreateResult.id;
-  console.log("HubSpot Sync: Deal created successfully with ID:", dealId);
-
-  // 5. Associate Deal to Company
-  if (dealId && companyId) {
-    console.log(`HubSpot Sync: Associating Deal (${dealId}) to Company (${companyId})...`);
-    await apiCall(`/crm/v3/objects/deals/${dealId}/associations/companies/${companyId}/deal_to_company`, {
-      method: 'PUT'
-    });
-  }
-
-  // 6. Associate Deal to Contact
-  if (dealId && contactId) {
-    console.log(`HubSpot Sync: Associating Deal (${dealId}) to Contact (${contactId})...`);
-    await apiCall(`/crm/v3/objects/deals/${dealId}/associations/contacts/${contactId}/deal_to_contact`, {
-      method: 'PUT'
-    });
-  }
-
-  showToast('Sincronizado con HubSpot con éxito!', 'check-circle');
 }
+
+// Trigger Excel Export Action using ExcelJS
+exportExcelBtn.addEventListener('click', async () => {
+  const successRecords = processedPDFs.filter(p => p.status === 'success');
+  if (successRecords.length === 0) {
+    showToast('No hay presupuestos cargados correctamente para exportar.', 'alert-triangle');
+    return;
+  }
+
+  const originalHtml = exportExcelBtn.innerHTML;
+  exportExcelBtn.disabled = true;
+  exportExcelBtn.innerHTML = `<i data-lucide="loader-2" class="spin" style="width: 18px; height: 18px;"></i> Exportando...`;
+  lucide.createIcons();
+
+  try {
+    let wb;
+    let fileName = "presupuestos_extraidos.xlsx";
+
+    if (excelWorkbook && selectedSheetName) {
+      wb = excelWorkbook;
+      fileName = selectedExcelFile.name;
+      appendToWorkbook(wb, selectedSheetName, successRecords.map(r => r.data));
+    } else {
+      // Create new workbook if no template was selected
+      wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet("Presupuestos");
+      const fieldsMeta = [
+        { key: 'estado', header: 'Estado' },
+        { key: 'orden', header: 'Orden' },
+        { key: 'fecha', header: 'Fecha' },
+        { key: 'presupuesto', header: 'Nº de Presupuesto' },
+        { key: 'metros', header: 'M2' },
+        { key: 'material', header: 'Material' },
+        { key: 'empresa', header: 'Nombre y/o Empresa' },
+        { key: 'obra', header: 'Zona de Obra' },
+        { key: 'contacto', header: 'Contacto' },
+        { key: 'mail', header: 'Email' },
+        { key: 'telf', header: 'Teléfono' },
+        { key: 'objetivo', header: 'Objetivo Próxima Gestión' },
+        { key: 'detalle', header: 'Detalle/ Resultados' },
+        { key: 'fecha_resultados', header: 'Fecha de Resultados' },
+        
+        // Optional fields added to a new spreadsheet
+        { key: 'dominio', header: 'Dominio Corporativo' },
+        { key: 'ref', header: 'Referencia' },
+        { key: 'cint', header: 'C.Int.' },
+        { key: 'fecha_vencimiento', header: 'Fecha de Vencimiento' },
+        { key: 'total', header: 'Total del Presupuesto' },
+        { key: 'entrega', header: 'Entrega' },
+        { key: 'forma_pago', header: 'Forma de Pago' },
+        { key: 'mano_obra', header: 'Mano de Obra' },
+        { key: 'mayores_costos', header: 'Mayores Costos' },
+        { key: 'validez', header: 'Validez de la Oferta' },
+        { key: 'observaciones', header: 'Observaciones' },
+        { key: 'condiciones', header: 'Condiciones Generales' }
+      ];
+
+      ws.columns = fieldsMeta.map(meta => ({ header: meta.header, key: meta.key }));
+
+      successRecords.forEach((r, idx) => {
+        const recordData = {
+          ...r.data,
+          orden: idx + 1
+        };
+        ws.addRow(recordData);
+      });
+    }
+
+    // Write buffer using ExcelJS
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    setTimeout(() => {
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }, 100);
+
+    showToast('Datos exportados e incorporados al Excel con éxito.', 'check-circle');
+  } catch (error) {
+    console.error('Error al exportar a Excel:', error);
+    showToast(`Error al exportar: ${error.message}`, 'x-circle');
+  } finally {
+    exportExcelBtn.disabled = false;
+    exportExcelBtn.innerHTML = originalHtml;
+    lucide.createIcons();
+  }
+});
